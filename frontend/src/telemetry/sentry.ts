@@ -24,6 +24,7 @@ export const initSentry = () => {
       }
       return event;
     },
+    sendDefaultPii: true,
   });
 };
 
