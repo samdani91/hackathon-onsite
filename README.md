@@ -1,5 +1,15 @@
 # Delineate Hackathon Challenge - CUET Fest 2025
 
+## 🚀 Live Demo
+
+**Frontend Application**: http://36.255.70.156
+
+The complete solution is deployed with:
+- **Frontend**: React application with real-time download tracking
+- **Backend**: Node.js API with S3 storage integration
+- **Infrastructure**: nginx reverse proxy, Prometheus monitoring, Docker containerization
+- **CI/CD**: GitHub Actions automated deployment pipeline
+
 ## The Scenario
 
 This microservice simulates a **real-world file download system** where processing times vary significantly:
@@ -16,7 +26,7 @@ This microservice simulates a **real-world file download system** where processi
 
 **Why does this matter?**
 
-When you deploy this service behind a reverse proxy (Cloudflare, nginx, AWS ALB), you'll encounter:
+When deploy this service behind a reverse proxy (Cloudflare, nginx, AWS ALB), we'll encounter:
 
 | Problem                 | Impact                                        |
 | ----------------------- | --------------------------------------------- |
@@ -410,6 +420,7 @@ Errors in Sentry tagged with: trace_id=abc123
 
 ## Tech Stack
 
+### Backend
 - **Runtime**: Node.js 24 with native TypeScript support
 - **Framework**: [Hono](https://hono.dev) - Ultra-fast web framework
 - **Validation**: [Zod](https://zod.dev) with OpenAPI integration
@@ -417,6 +428,19 @@ Errors in Sentry tagged with: trace_id=abc123
 - **Observability**: OpenTelemetry + Jaeger
 - **Error Tracking**: Sentry
 - **Documentation**: Scalar OpenAPI UI
+
+### Frontend
+- **Framework**: React with Vite
+- **UI Components**: Modern responsive design
+- **Real-time Updates**: WebSocket/polling for download progress
+- **Error Handling**: Integrated Sentry error tracking
+
+### Infrastructure & DevOps
+- **Reverse Proxy**: nginx with load balancing
+- **Monitoring**: Prometheus metrics collection
+- **Containerization**: Docker & Docker Compose
+- **CI/CD**: GitHub Actions automated pipeline
+- **Deployment**: Production server with automated deployments
 
 ## Quick Start
 
@@ -512,6 +536,36 @@ curl -X POST http://localhost:3000/v1/download/start \
   -d '{"file_id": 70000}'
 ```
 
+## 🏗️ Deployment Architecture
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   GitHub Repo   │───▶│  GitHub Actions │───▶│  Production     │
+│                 │    │     CI/CD       │    │    Server       │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+                                                       │
+                       ┌─────────────────────────────────┼─────────────────────────────────┐
+                       │                                 ▼                                 │
+                       │  ┌─────────────┐    ┌─────────────────┐    ┌─────────────────┐  │
+                       │  │    nginx    │───▶│   Frontend      │    │   Backend API   │  │
+                       │  │   (Proxy)   │    │   (React)       │    │   (Node.js)     │  │
+                       │  └─────────────┘    └─────────────────┘    └─────────────────┘  │
+                       │                              │                       │           │
+                       │  ┌─────────────┐    ┌─────────────────┐    ┌─────────────────┐  │
+                       │  │ Prometheus  │    │   S3 Storage    │    │     Docker      │  │
+                       │  │ (Monitoring)│    │   (RustFS)      │    │  (Containers)   │  │
+                       │  └─────────────┘    └─────────────────┘    └─────────────────┘  │
+                       └─────────────────────────────────────────────────────────────────┘
+```
+
+### Production Features
+
+- **Load Balancing**: nginx handles traffic distribution
+- **SSL/TLS**: Secure HTTPS connections
+- **Monitoring**: Prometheus metrics and alerting
+- **Auto-scaling**: Docker containers with health checks
+- **Zero-downtime**: Rolling deployments via GitHub Actions
+
 ## Available Scripts
 
 ```bash
@@ -532,6 +586,13 @@ npm run docker:prod  # Start with Docker (production)
 .
 ├── src/
 │   └── index.ts          # Main application entry point
+├── frontend/             # React frontend application
+│   ├── src/
+│   │   ├── App.jsx       # Main React component
+│   │   ├── api.js        # API integration layer
+│   │   └── components/   # Reusable UI components
+│   ├── package.json      # Frontend dependencies
+│   └── nginx.conf        # nginx configuration
 ├── scripts/
 │   ├── e2e-test.ts       # E2E test suite
 │   └── run-e2e.ts        # Test runner with server management
@@ -539,14 +600,61 @@ npm run docker:prod  # Start with Docker (production)
 │   ├── Dockerfile.dev    # Development Dockerfile
 │   ├── Dockerfile.prod   # Production Dockerfile
 │   ├── compose.dev.yml   # Development Docker Compose
-│   └── compose.prod.yml  # Production Docker Compose
+│   ├── compose.prod.yml  # Production Docker Compose
+│   └── prometheus.yml    # Prometheus monitoring config
 ├── .github/
 │   └── workflows/
 │       └── ci.yml        # GitHub Actions CI pipeline
+├── ARCHITECTURE.md       # System architecture documentation
 ├── package.json
 ├── tsconfig.json
 └── eslint.config.mjs
 ```
+
+## 🔧 Infrastructure Components
+
+### nginx Configuration
+- Reverse proxy for frontend and API
+- Load balancing across multiple backend instances
+- Static file serving with caching
+- SSL termination and security headers
+
+### Prometheus Monitoring
+- API response time metrics
+- Download job success/failure rates
+- System resource utilization
+- Custom business metrics
+
+### Docker Containerization
+- Multi-stage builds for optimized images
+- Health checks for all services
+- Volume persistence for data
+- Network isolation and security
+
+### GitHub Actions CI/CD
+- Automated testing on every push
+- Docker image building and pushing
+- Zero-downtime production deployments
+- Environment-specific configurations
+
+## 🔍 Monitoring & Observability
+
+Visit the live application at **http://36.255.70.156** to see:
+
+- **Real-time Download Tracking**: Watch downloads progress in real-time
+- **Error Handling**: Comprehensive error reporting with Sentry integration
+- **Performance Metrics**: Response times and success rates via Prometheus
+- **Health Monitoring**: System health checks and service status
+- **Distributed Tracing**: End-to-end request tracking with OpenTelemetry
+
+### Metrics Available
+
+| Metric Type | Description | Endpoint |
+|-------------|-------------|----------|
+| Health Check | Service availability | `/health` |
+| API Metrics | Response times, error rates | `/metrics` |
+| Download Stats | Job completion rates | Frontend dashboard |
+| System Metrics | CPU, memory, disk usage | Prometheus |
 
 ## Security Features
 
@@ -557,6 +665,8 @@ npm run docker:prod  # Start with Docker (production)
 - Input validation with Zod schemas
 - Path traversal prevention for S3 keys
 - Graceful shutdown handling
+- nginx security configurations
+- Container isolation and least privilege
 
 ## License
 
