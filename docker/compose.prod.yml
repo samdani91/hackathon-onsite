@@ -47,7 +47,7 @@ services:
     volumes:
       - rustfs-data:/data
     healthcheck:
-      test: ["CMD", "nc", "-z", "localhost", "9000"]
+      test: [ "CMD", "nc", "-z", "localhost", "9000" ]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -62,7 +62,7 @@ services:
       - ../.env.storage
     environment:
       - AWS_DEFAULT_REGION=us-east-1
-    entrypoint: ["/bin/sh", "-c"]
+    entrypoint: [ "/bin/sh", "-c" ]
     command:
       - |
         aws --endpoint-url http://delineate-storage:9000 s3 mb s3://downloads --region us-east-1 || true
@@ -80,6 +80,9 @@ services:
       - "80:80"
     env_file:
       - ../.env
+    environment:
+      - VITE_API_BASE=
+      - VITE_SENTRY_DSN=
 
     depends_on:
       - delineate-app
