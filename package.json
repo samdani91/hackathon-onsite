@@ -13,7 +13,12 @@
     "format:check": "prettier --check .",
     "test:e2e": "node --experimental-transform-types scripts/run-e2e.ts",
     "docker:dev": "docker compose -f docker/compose.dev.yml up --build",
-    "docker:prod": "docker compose -f docker/compose.prod.yml up --build -d"
+    "docker:prod": "docker compose -f docker/compose.prod.yml up --build -d",
+    "frontend:install": "cd frontend && npm install",
+    "frontend:dev": "cd frontend && npm run dev",
+    "frontend:build": "cd frontend && npm run build",
+    "frontend:setup": "cd frontend && ./setup.sh",
+    "dev:full": "concurrently \"npm run dev\" \"npm run frontend:dev\""
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.948.0",
@@ -33,6 +38,7 @@
   "devDependencies": {
     "@hono/eslint-config": "^2.0.3",
     "@types/node": "^24.10.2",
+    "concurrently": "^8.2.2",
     "prettier": "^3.7.4",
     "typescript": "^5.8.3"
   }
