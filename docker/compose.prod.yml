@@ -80,7 +80,7 @@ services:
       - "80:80"
     env_file:
       - ../.env
-      - ../frontend/.env
+
     depends_on:
       - delineate-app
     restart: unless-stopped
