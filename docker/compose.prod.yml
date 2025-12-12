@@ -3,8 +3,8 @@ name: delineate
 services:
   delineate-app:
     # Use the pre-built image
-    image: delineate-hackathon-challenge:latest
-    pull_policy: never
+    image: hasinloosingcontrol/delineate-hackathon-challenge:latest
+    pull_policy: always
     # build:
     #   context: ..
     #   dockerfile: docker/Dockerfile.prod
