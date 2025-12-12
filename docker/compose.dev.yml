@@ -51,6 +51,9 @@ services:
       - "9001:9001"
     env_file:
       - ../.env.storage
+    environment:
+      - RUSTFS_ACCESS_KEY=minioadmin
+      - RUSTFS_SECRET_KEY=minioadmin
     volumes:
       # Persistent data volume
       - rustfs-data:/data

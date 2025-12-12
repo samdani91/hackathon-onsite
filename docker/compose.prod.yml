@@ -2,7 +2,9 @@ name: delineate
 
 services:
   delineate-app:
-    image: hasinloosingcontrol/delineate-hackathon-challenge:latest
+    # Use the pre-built image
+    image: delineate-hackathon-challenge:latest
+    pull_policy: never
     # build:
     #   context: ..
     #   dockerfile: docker/Dockerfile.prod
@@ -16,22 +18,30 @@ services:
       - ../.env.storage
     environment:
       - NODE_ENV=production
+      - DOWNLOAD_DELAY_MIN_MS=5000
+      - DOWNLOAD_DELAY_MAX_MS=10000
       # S3 configuration - endpoint override for container networking
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
       - S3_ENDPOINT=http://delineate-storage:9000
-      - S3_BUCKET_NAME=downloads
-      - S3_FORCE_PATH_STYLE=true
     depends_on:
       delineate-storage-init:
         condition: service_completed_successfully
-    restart: unless-stopped
-    # Dockerfile already sets USER node, but explicit here for clarity
-    user: "1000:1000"
-    # Security options
     security_opt:
       - no-new-privileges:true
     read_only: true
     tmpfs:
-      - /tmp:noexec,nosuid,size=64m
+      - /tmp
+
+  delineate-nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - delineate-app
+    security_opt:
+      - no-new-privileges:true
 
   delineate-storage:
     image: rustfs/rustfs:latest
@@ -40,22 +50,19 @@ services:
       - "9001:9001"
     env_file:
       - ../.env.storage
+    environment:
+      - RUSTFS_ACCESS_KEY=minioadmin
+      - RUSTFS_SECRET_KEY=minioadmin
+      - S3_BACKEND=fs
+      - S3_FS_ROOT=/data
     volumes:
-      # Persistent data volume
       - rustfs-data:/data
-      # Logs volume
-      - rustfs-logs:/logs
-    restart: unless-stopped
     healthcheck:
       test: ["CMD", "nc", "-z", "localhost", "9000"]
       interval: 5s
       timeout: 5s
       retries: 10
       start_period: 15s
-    # Security options
-    security_opt:
-      - no-new-privileges:true
-    # RustFS runs as UID 10001 by default
 
   delineate-storage-init:
     image: amazon/aws-cli:latest
@@ -71,9 +78,6 @@ services:
       - |
         aws --endpoint-url http://delineate-storage:9000 s3 mb s3://downloads --region us-east-1 || true
         echo "Bucket 'downloads' is ready"
-    # Security
-    security_opt:
-      - no-new-privileges:true
 
   delineate-frontend:
     build:
@@ -94,6 +98,4 @@ services:
 
 volumes:
   rustfs-data:
-    driver: local
-  rustfs-logs:
     driver: local
