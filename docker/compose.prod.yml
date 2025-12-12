@@ -74,6 +74,23 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  delineate-frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+    ports:
+      - "80:80"
+    env_file:
+      - ../.env
+      - ../frontend/.env
+    depends_on:
+      - delineate-app
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
 volumes:
   rustfs-data:
     driver: local
