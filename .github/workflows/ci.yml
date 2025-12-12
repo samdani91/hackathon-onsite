@@ -78,6 +78,14 @@ jobs:
           echo "Docker username: ${{ secrets.DOCKER_USERNAME }}"
           echo "Secrets validated successfully"
 
+      - name: Normalize Docker username
+        id: docker_username
+        run: |
+          # Convert username to lowercase for Docker tag compatibility
+          NORMALIZED_USERNAME=$(echo "${{ secrets.DOCKER_USERNAME }}" | tr '[:upper:]' '[:lower:]')
+          echo "username=${NORMALIZED_USERNAME}" >> $GITHUB_OUTPUT
+          echo "Normalized username: ${NORMALIZED_USERNAME}"
+
       - name: Login to DockerHub
         uses: docker/login-action@v3
         with:
@@ -93,6 +101,6 @@ jobs:
           context: .
           file: docker/Dockerfile.prod
           push: true
-          tags: ${{ secrets.DOCKER_USERNAME }}/delineate-hackathon-challenge:latest
+          tags: ${{ steps.docker_username.outputs.username }}/delineate-hackathon-challenge:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
