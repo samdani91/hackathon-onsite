@@ -32,17 +32,6 @@ services:
     tmpfs:
       - /tmp
 
-  delineate-nginx:
-    image: nginx:alpine
-    ports:
-      - "80:80"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-    depends_on:
-      - delineate-app
-    security_opt:
-      - no-new-privileges:true
-
   delineate-storage:
     image: rustfs/rustfs:latest
     ports:
@@ -80,11 +69,13 @@ services:
         echo "Bucket 'downloads' is ready"
 
   delineate-frontend:
-    build:
-      context: ../frontend
-      dockerfile: Dockerfile
-      args:
-        BUILDKIT_INLINE_CACHE: 1
+    image: hasinloosingcontrol/delineate-frontend:latest
+    pull_policy: always
+    # build:
+    #   context: ../frontend
+    #   dockerfile: Dockerfile
+    #   args:
+    #     BUILDKIT_INLINE_CACHE: 1
     ports:
       - "80:80"
     env_file:

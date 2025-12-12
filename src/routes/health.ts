@@ -7,7 +7,7 @@ import { checkS3Health } from "../services/s3.ts";
 // Routes
 const rootRoute = createRoute({
   method: "get",
-  path: "/",
+  path: "/v1/",
   tags: ["General"],
   summary: "Root endpoint",
   description: "Returns a welcome message",
@@ -25,7 +25,7 @@ const rootRoute = createRoute({
 
 const healthRoute = createRoute({
   method: "get",
-  path: "/health",
+  path: "/v1/health",
   tags: ["Health"],
   summary: "Health check endpoint",
   description: "Returns the health status of the service and its dependencies",
