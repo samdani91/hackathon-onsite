@@ -54,22 +54,39 @@ jobs:
           CORS_ORIGINS: "*"
 
   build:
-    name: Build Docker Image
+    name: Build and Push Docker Image
     runs-on: ubuntu-24.04
     needs: test
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Check for Secrets
+        run: |
+          if [ -z "${{ secrets.DOCKER_USERNAME }}" ]; then
+            echo "::error::DOCKER_USERNAME secret is missing or empty!"
+            exit 1
+          fi
+          if [ -z "${{ secrets.DOCKER_PASSWORD }}" ]; then
+            echo "::error::DOCKER_PASSWORD secret is missing or empty!"
+            exit 1
+          fi
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build Docker image
+      - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: docker/Dockerfile.prod
-          push: false
-          tags: delineate-hackathon-challenge:${{ github.sha }}
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/delineate-hackathon-challenge:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
