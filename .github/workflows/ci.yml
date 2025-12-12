@@ -81,8 +81,8 @@ jobs:
       - name: Normalize Docker username
         id: docker_username
         run: |
-          # Convert username to lowercase for Docker tag compatibility
-          NORMALIZED_USERNAME=$(echo "${{ secrets.DOCKER_USERNAME }}" | tr '[:upper:]' '[:lower:]')
+          # Convert username to lowercase and strip any whitespace/newlines
+          NORMALIZED_USERNAME=$(echo "${{ secrets.DOCKER_USERNAME }}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
           echo "username=${NORMALIZED_USERNAME}" >> $GITHUB_OUTPUT
           echo "Normalized username: ${NORMALIZED_USERNAME}"
 
