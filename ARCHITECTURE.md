@@ -107,6 +107,7 @@ This document outlines a production-ready architecture for handling variable-len
 After analyzing all options, a **hybrid approach combining polling and WebSocket** provides the best balance:
 
 ✅ **Advantages:**
+
 - **Resilience**: Polling works even if WebSocket fails (firewall/proxy issues)
 - **Real-time UX**: WebSocket provides instant updates when available
 - **Universal compatibility**: Polling works everywhere
@@ -115,12 +116,12 @@ After analyzing all options, a **hybrid approach combining polling and WebSocket
 
 ### Pattern Comparison
 
-| Pattern | Pros | Cons | Use Case |
-|---------|------|------|----------|
-| **Polling** | Simple, universal, firewall-friendly | Higher latency, more requests | Legacy systems, simple implementations |
-| **WebSocket** | Real-time, efficient, bidirectional | Proxy issues, connection management | Modern apps with real-time needs |
-| **Webhook** | Decoupled, reliable | Requires public endpoint, complex | B2B integrations, server-to-server |
-| **Hybrid** | Best of all worlds, resilient | Slightly more complex | **Production systems (RECOMMENDED)** |
+| Pattern       | Pros                                 | Cons                                | Use Case                               |
+| ------------- | ------------------------------------ | ----------------------------------- | -------------------------------------- |
+| **Polling**   | Simple, universal, firewall-friendly | Higher latency, more requests       | Legacy systems, simple implementations |
+| **WebSocket** | Real-time, efficient, bidirectional  | Proxy issues, connection management | Modern apps with real-time needs       |
+| **Webhook**   | Decoupled, reliable                  | Requires public endpoint, complex   | B2B integrations, server-to-server     |
+| **Hybrid**    | Best of all worlds, resilient        | Slightly more complex               | **Production systems (RECOMMENDED)**   |
 
 ---
 
@@ -129,13 +130,15 @@ After analyzing all options, a **hybrid approach combining polling and WebSocket
 ### 3.1 API Contract
 
 #### A. POST /v1/download/initiate
+
 **Purpose**: Start download job asynchronously
 
 **Request:**
+
 ```json
 {
   "file_id": 70000,
-  "priority": "normal",  // "low" | "normal" | "high"
+  "priority": "normal", // "low" | "normal" | "high"
   "user_id": "user_123",
   "metadata": {
     "source": "web_app",
@@ -145,6 +148,7 @@ After analyzing all options, a **hybrid approach combining polling and WebSocket
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -152,13 +156,14 @@ After analyzing all options, a **hybrid approach combining polling and WebSocket
     "job_id": "job_7f8a9b2c3d4e",
     "status": "queued",
     "estimated_time": 60,
-    "polling_interval": 2000,  // ms
+    "polling_interval": 2000, // ms
     "websocket_url": "wss://api.example.com/v1/download/subscribe/job_7f8a9b2c3d4e"
   }
 }
 ```
 
 **Response (429 Too Many Requests):**
+
 ```json
 {
   "success": false,
@@ -173,16 +178,18 @@ After analyzing all options, a **hybrid approach combining polling and WebSocket
 ---
 
 #### B. GET /v1/download/status/:jobId
+
 **Purpose**: Poll for job status
 
 **Response (200 OK - Processing):**
+
 ```json
 {
   "success": true,
   "data": {
     "job_id": "job_7f8a9b2c3d4e",
-    "status": "processing",  // "queued" | "processing" | "completed" | "failed"
-    "progress": 45,  // 0-100
+    "status": "processing", // "queued" | "processing" | "completed" | "failed"
+    "progress": 45, // 0-100
     "created_at": "2025-12-12T04:15:00Z",
     "updated_at": "2025-12-12T04:15:30Z",
     "estimated_completion": "2025-12-12T04:16:30Z"
@@ -191,6 +198,7 @@ After analyzing all options, a **hybrid approach combining polling and WebSocket
 ```
 
 **Response (200 OK - Completed):**
+
 ```json
 {
   "success": true,
@@ -205,6 +213,7 @@ After analyzing all options, a **hybrid approach combining polling and WebSocket
 ```
 
 **Response (200 OK - Failed):**
+
 ```json
 {
   "success": true,
@@ -223,9 +232,11 @@ After analyzing all options, a **hybrid approach combining polling and WebSocket
 ---
 
 #### C. GET /v1/download/:jobId
+
 **Purpose**: Get the actual download (presigned URL)
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -240,6 +251,7 @@ After analyzing all options, a **hybrid approach combining polling and WebSocket
 ```
 
 **Response (404 Not Found):**
+
 ```json
 {
   "success": false,
@@ -253,9 +265,11 @@ After analyzing all options, a **hybrid approach combining polling and WebSocket
 ---
 
 #### D. DELETE /v1/download/:jobId
+
 **Purpose**: Cancel an ongoing job
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -266,9 +280,11 @@ After analyzing all options, a **hybrid approach combining polling and WebSocket
 ---
 
 #### E. WebSocket: /v1/download/subscribe/:jobId
+
 **Purpose**: Real-time status updates
 
 **Message Format (Server → Client):**
+
 ```json
 {
   "type": "status_update",
@@ -301,18 +317,19 @@ After analyzing all options, a **hybrid approach combining polling and WebSocket
 ### 3.2 Database Schema
 
 #### Redis Cache (Job Metadata)
+
 ```typescript
 interface JobMetadata {
   jobId: string;
   fileId: number;
   userId: string;
-  status: 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';
-  progress: number;  // 0-100
+  status: "queued" | "processing" | "completed" | "failed" | "cancelled";
+  progress: number; // 0-100
   createdAt: string;
   updatedAt: string;
   startedAt?: string;
   completedAt?: string;
-  downloadUrl?: string;  // S3 presigned URL
+  downloadUrl?: string; // S3 presigned URL
   expiresAt?: string;
   error?: {
     code: string;
@@ -331,6 +348,7 @@ interface JobMetadata {
 ```
 
 #### PostgreSQL (Audit & Analytics)
+
 ```sql
 CREATE TABLE download_jobs (
   id BIGSERIAL PRIMARY KEY,
@@ -354,7 +372,7 @@ CREATE TABLE download_jobs (
 
 -- Analytics queries
 CREATE MATERIALIZED VIEW download_analytics AS
-SELECT 
+SELECT
   DATE_TRUNC('hour', created_at) as hour,
   COUNT(*) as total_jobs,
   COUNT(*) FILTER (WHERE status = 'completed') as completed,
@@ -372,25 +390,26 @@ ORDER BY hour DESC;
 ### 3.3 Background Job Processing
 
 #### BullMQ Configuration
+
 ```typescript
 // queue.config.ts
-import { Queue, Worker, QueueScheduler } from 'bullmq';
-import Redis from 'ioredis';
+import { Queue, Worker, QueueScheduler } from "bullmq";
+import Redis from "ioredis";
 
 const redisConnection = new Redis({
-  host: process.env.REDIS_HOST || 'localhost',
-  port: parseInt(process.env.REDIS_PORT || '6379'),
+  host: process.env.REDIS_HOST || "localhost",
+  port: parseInt(process.env.REDIS_PORT || "6379"),
   maxRetriesPerRequest: null,
   enableReadyCheck: false,
 });
 
 // Job Queue
-export const downloadQueue = new Queue('download-jobs', {
+export const downloadQueue = new Queue("download-jobs", {
   connection: redisConnection,
   defaultJobOptions: {
     attempts: 3,
     backoff: {
-      type: 'exponential',
+      type: "exponential",
       delay: 5000,
     },
     removeOnComplete: {
@@ -404,7 +423,7 @@ export const downloadQueue = new Queue('download-jobs', {
 });
 
 // Queue Scheduler (for retries and delayed jobs)
-export const queueScheduler = new QueueScheduler('download-jobs', {
+export const queueScheduler = new QueueScheduler("download-jobs", {
   connection: redisConnection,
 });
 
@@ -417,43 +436,41 @@ export enum JobPriority {
 ```
 
 #### Worker Implementation
+
 ```typescript
 // worker.ts
-import { Worker, Job } from 'bullmq';
-import { downloadQueue } from './queue.config';
-import { updateJobStatus, notifyWebSocketClients } from './services';
-import { uploadToS3, generatePresignedUrl } from './storage';
+import { Worker, Job } from "bullmq";
+import { downloadQueue } from "./queue.config";
+import { updateJobStatus, notifyWebSocketClients } from "./services";
+import { uploadToS3, generatePresignedUrl } from "./storage";
 
 const worker = new Worker(
-  'download-jobs',
+  "download-jobs",
   async (job: Job) => {
     const { jobId, fileId, userId } = job.data;
 
     try {
       // Update status to processing
       await updateJobStatus(jobId, {
-        status: 'processing',
+        status: "processing",
         startedAt: new Date().toISOString(),
         progress: 0,
       });
 
       await notifyWebSocketClients(jobId, {
-        type: 'status_update',
-        status: 'processing',
+        type: "status_update",
+        status: "processing",
         progress: 0,
       });
 
       // Simulate download with progress updates
-      const fileBuffer = await downloadFileWithProgress(
-        fileId,
-        (progress) => {
-          updateJobStatus(jobId, { progress });
-          notifyWebSocketClients(jobId, {
-            type: 'progress',
-            progress,
-          });
-        }
-      );
+      const fileBuffer = await downloadFileWithProgress(fileId, (progress) => {
+        updateJobStatus(jobId, { progress });
+        notifyWebSocketClients(jobId, {
+          type: "progress",
+          progress,
+        });
+      });
 
       // Upload to S3
       const s3Key = `downloads/${userId}/${jobId}`;
@@ -464,7 +481,7 @@ const worker = new Worker(
 
       // Update to completed
       await updateJobStatus(jobId, {
-        status: 'completed',
+        status: "completed",
         progress: 100,
         downloadUrl,
         completedAt: new Date().toISOString(),
@@ -472,25 +489,26 @@ const worker = new Worker(
       });
 
       await notifyWebSocketClients(jobId, {
-        type: 'completed',
+        type: "completed",
         downloadUrl: `/v1/download/${jobId}`,
       });
 
       return { success: true };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+
       await updateJobStatus(jobId, {
-        status: 'failed',
+        status: "failed",
         error: {
-          code: 'PROCESSING_ERROR',
+          code: "PROCESSING_ERROR",
           message: errorMessage,
           retryable: job.attemptsMade < 3,
         },
       });
 
       await notifyWebSocketClients(jobId, {
-        type: 'error',
+        type: "error",
         error: errorMessage,
       });
 
@@ -504,20 +522,20 @@ const worker = new Worker(
       max: 50, // Max 50 jobs per duration
       duration: 60000, // Per minute
     },
-  }
+  },
 );
 
 // Worker event handlers
-worker.on('completed', (job) => {
+worker.on("completed", (job) => {
   console.log(`Job ${job.id} completed successfully`);
 });
 
-worker.on('failed', (job, err) => {
+worker.on("failed", (job, err) => {
   console.error(`Job ${job?.id} failed:`, err.message);
 });
 
-worker.on('error', (err) => {
-  console.error('Worker error:', err);
+worker.on("error", (err) => {
+  console.error("Worker error:", err);
 });
 ```
 
@@ -526,44 +544,46 @@ worker.on('error', (err) => {
 ### 3.4 Error Handling & Retry Logic
 
 #### Error Categories
+
 ```typescript
 enum ErrorCode {
   // Retryable errors
-  NETWORK_ERROR = 'NETWORK_ERROR',
-  TEMPORARY_UNAVAILABLE = 'TEMPORARY_UNAVAILABLE',
-  RATE_LIMIT = 'RATE_LIMIT',
-  
+  NETWORK_ERROR = "NETWORK_ERROR",
+  TEMPORARY_UNAVAILABLE = "TEMPORARY_UNAVAILABLE",
+  RATE_LIMIT = "RATE_LIMIT",
+
   // Non-retryable errors
-  FILE_NOT_FOUND = 'FILE_NOT_FOUND',
-  INVALID_FILE_ID = 'INVALID_FILE_ID',
-  PERMISSION_DENIED = 'PERMISSION_DENIED',
-  FILE_TOO_LARGE = 'FILE_TOO_LARGE',
-  
+  FILE_NOT_FOUND = "FILE_NOT_FOUND",
+  INVALID_FILE_ID = "INVALID_FILE_ID",
+  PERMISSION_DENIED = "PERMISSION_DENIED",
+  FILE_TOO_LARGE = "FILE_TOO_LARGE",
+
   // System errors
-  PROCESSING_ERROR = 'PROCESSING_ERROR',
-  STORAGE_ERROR = 'STORAGE_ERROR',
-  TIMEOUT = 'TIMEOUT',
+  PROCESSING_ERROR = "PROCESSING_ERROR",
+  STORAGE_ERROR = "STORAGE_ERROR",
+  TIMEOUT = "TIMEOUT",
 }
 
 function isRetryable(error: Error): boolean {
   const retryableCodes = [
-    'NETWORK_ERROR',
-    'TEMPORARY_UNAVAILABLE',
-    'RATE_LIMIT',
-    'PROCESSING_ERROR',
+    "NETWORK_ERROR",
+    "TEMPORARY_UNAVAILABLE",
+    "RATE_LIMIT",
+    "PROCESSING_ERROR",
   ];
-  
+
   return retryableCodes.includes((error as any).code);
 }
 ```
 
 #### Retry Strategy
+
 ```typescript
 // Exponential backoff with jitter
 const retryConfig = {
   attempts: 3,
   backoff: {
-    type: 'exponential',
+    type: "exponential",
     delay: 5000, // Start with 5s
   },
 };
@@ -576,8 +596,9 @@ const retryConfig = {
 ```
 
 #### Circuit Breaker Pattern
+
 ```typescript
-import CircuitBreaker from 'opossum';
+import CircuitBreaker from "opossum";
 
 const downloadCircuitBreaker = new CircuitBreaker(downloadFile, {
   timeout: 150000, // 150 seconds
@@ -585,8 +606,8 @@ const downloadCircuitBreaker = new CircuitBreaker(downloadFile, {
   resetTimeout: 30000, // 30 seconds
 });
 
-downloadCircuitBreaker.on('open', () => {
-  console.error('Circuit breaker opened - too many failures');
+downloadCircuitBreaker.on("open", () => {
+  console.error("Circuit breaker opened - too many failures");
   // Alert ops team
 });
 ```
@@ -595,15 +616,15 @@ downloadCircuitBreaker.on('open', () => {
 
 ### 3.5 Timeout Configuration
 
-| Layer | Timeout | Purpose |
-|-------|---------|---------|
-| **Client (Browser)** | N/A | No timeout (polling handles this) |
-| **Cloudflare** | 100s | For polling endpoints only |
-| **Nginx** | 60s | For API requests |
-| **WebSocket** | 10 min | Keep-alive for status updates |
-| **API Server** | 30s | Per HTTP request |
-| **Worker Job** | 150s | Maximum job processing time |
-| **S3 Presigned URL** | 15 min | Download window |
+| Layer                | Timeout | Purpose                           |
+| -------------------- | ------- | --------------------------------- |
+| **Client (Browser)** | N/A     | No timeout (polling handles this) |
+| **Cloudflare**       | 100s    | For polling endpoints only        |
+| **Nginx**            | 60s     | For API requests                  |
+| **WebSocket**        | 10 min  | Keep-alive for status updates     |
+| **API Server**       | 30s     | Per HTTP request                  |
+| **Worker Job**       | 150s    | Maximum job processing time       |
+| **S3 Presigned URL** | 15 min  | Download window                   |
 
 ---
 
@@ -629,7 +650,7 @@ Rule: "Download Initiate Rate Limit"
   Path: /v1/download/initiate
   Method: POST
   Rate: 10 requests per 60 seconds per IP
-  
+
 # Caching (disable for API)
 Cache Rule:
   Path: /v1/download/*
@@ -672,22 +693,22 @@ server {
     location /v1/download/ {
         proxy_pass http://api_backend;
         proxy_http_version 1.1;
-        
+
         # Timeouts
         proxy_connect_timeout 10s;
         proxy_send_timeout 60s;
         proxy_read_timeout 60s;
-        
+
         # Headers
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        
+
         # Disable buffering for streaming responses
         proxy_buffering off;
         proxy_request_buffering off;
-        
+
         # Rate limiting
         limit_req zone=download_init burst=5 nodelay;
     }
@@ -696,21 +717,21 @@ server {
     location /v1/download/subscribe/ {
         proxy_pass http://api_backend;
         proxy_http_version 1.1;
-        
+
         # WebSocket specific
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
-        
+
         # Extended timeouts for WebSocket
         proxy_connect_timeout 10s;
         proxy_send_timeout 600s;  # 10 minutes
         proxy_read_timeout 600s;  # 10 minutes
-        
+
         # Headers
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        
+
         # Disable buffering
         proxy_buffering off;
     }
@@ -734,7 +755,7 @@ TargetGroup:
     Timeout: 5
     HealthyThreshold: 2
     UnhealthyThreshold: 3
-  
+
   Attributes:
     - Key: deregistration_delay.timeout_seconds
       Value: 30
@@ -755,7 +776,7 @@ Listener:
 # Idle timeout (max: 4000 seconds)
 LoadBalancerAttributes:
   - Key: idle_timeout.timeout_seconds
-    Value: 120  # 2 minutes for REST
+    Value: 120 # 2 minutes for REST
 ```
 
 ---
@@ -763,14 +784,15 @@ LoadBalancerAttributes:
 ## 5. Frontend Integration (React/Next.js)
 
 ### 5.1 Download Hook
+
 ```typescript
 // hooks/useDownload.ts
-import { useState, useEffect, useRef } from 'react';
-import { io, Socket } from 'socket.io-client';
+import { useState, useEffect, useRef } from "react";
+import { io, Socket } from "socket.io-client";
 
 interface DownloadState {
   jobId: string | null;
-  status: 'idle' | 'queued' | 'processing' | 'completed' | 'failed';
+  status: "idle" | "queued" | "processing" | "completed" | "failed";
   progress: number;
   downloadUrl: string | null;
   error: string | null;
@@ -779,7 +801,7 @@ interface DownloadState {
 export function useDownload() {
   const [state, setState] = useState<DownloadState>({
     jobId: null,
-    status: 'idle',
+    status: "idle",
     progress: 0,
     downloadUrl: null,
     error: null,
@@ -791,23 +813,23 @@ export function useDownload() {
   // Initiate download
   const startDownload = async (fileId: number) => {
     try {
-      const response = await fetch('/v1/download/initiate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/v1/download/initiate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ file_id: fileId }),
       });
 
       const data = await response.json();
-      
+
       if (!data.success) {
         throw new Error(data.error.message);
       }
 
       const { job_id, websocket_url, polling_interval } = data.data;
-      
+
       setState({
         jobId: job_id,
-        status: 'queued',
+        status: "queued",
         progress: 0,
         downloadUrl: null,
         error: null,
@@ -815,19 +837,18 @@ export function useDownload() {
 
       // Try WebSocket first
       connectWebSocket(websocket_url, job_id);
-      
+
       // Fallback to polling after 5 seconds if WS fails
       setTimeout(() => {
         if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
           startPolling(job_id, polling_interval);
         }
       }, 5000);
-
     } catch (error) {
       setState((prev) => ({
         ...prev,
-        status: 'failed',
-        error: error instanceof Error ? error.message : 'Unknown error',
+        status: "failed",
+        error: error instanceof Error ? error.message : "Unknown error",
       }));
     }
   };
@@ -839,7 +860,7 @@ export function useDownload() {
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log('WebSocket connected');
+        console.log("WebSocket connected");
         // Stop polling if it started
         if (pollingRef.current) {
           clearInterval(pollingRef.current);
@@ -853,17 +874,17 @@ export function useDownload() {
       };
 
       ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
+        console.error("WebSocket error:", error);
         // Fallback to polling
         startPolling(jobId, 2000);
       };
 
       ws.onclose = () => {
-        console.log('WebSocket closed');
+        console.log("WebSocket closed");
         wsRef.current = null;
       };
     } catch (error) {
-      console.error('Failed to connect WebSocket:', error);
+      console.error("Failed to connect WebSocket:", error);
       startPolling(jobId, 2000);
     }
   };
@@ -872,18 +893,18 @@ export function useDownload() {
   const startPolling = (jobId: string, interval: number) => {
     if (pollingRef.current) return; // Already polling
 
-    console.log('Starting polling fallback');
-    
+    console.log("Starting polling fallback");
+
     pollingRef.current = setInterval(async () => {
       try {
         const response = await fetch(`/v1/download/status/${jobId}`);
         const data = await response.json();
-        
+
         if (data.success) {
           handleStatusUpdate(data.data);
-          
+
           // Stop polling when done
-          if (['completed', 'failed'].includes(data.data.status)) {
+          if (["completed", "failed"].includes(data.data.status)) {
             if (pollingRef.current) {
               clearInterval(pollingRef.current);
               pollingRef.current = null;
@@ -891,7 +912,7 @@ export function useDownload() {
           }
         }
       } catch (error) {
-        console.error('Polling error:', error);
+        console.error("Polling error:", error);
       }
     }, interval);
   };
@@ -909,12 +930,12 @@ export function useDownload() {
 
   // Download file
   const downloadFile = async () => {
-    if (!state.jobId || state.status !== 'completed') return;
+    if (!state.jobId || state.status !== "completed") return;
 
     try {
       const response = await fetch(`/v1/download/${state.jobId}`);
       const data = await response.json();
-      
+
       if (data.success) {
         // Trigger download
         window.location.href = data.data.download_url;
@@ -922,7 +943,7 @@ export function useDownload() {
     } catch (error) {
       setState((prev) => ({
         ...prev,
-        error: 'Failed to download file',
+        error: "Failed to download file",
       }));
     }
   };
@@ -932,7 +953,7 @@ export function useDownload() {
     if (state.jobId) {
       setState({
         jobId: null,
-        status: 'idle',
+        status: "idle",
         progress: 0,
         downloadUrl: null,
         error: null,
@@ -962,6 +983,7 @@ export function useDownload() {
 ```
 
 ### 5.2 Download Component
+
 ```typescript
 // components/DownloadButton.tsx
 import React from 'react';
@@ -1036,11 +1058,12 @@ export function DownloadButton({ fileId }: { fileId: number }) {
 ### 5.3 Advanced Features
 
 #### Multiple Downloads
+
 ```typescript
 // hooks/useMultipleDownloads.ts
 export function useMultipleDownloads() {
   const [downloads, setDownloads] = useState<Map<string, DownloadState>>(
-    new Map()
+    new Map(),
   );
 
   const startDownload = async (fileId: number) => {
@@ -1049,7 +1072,7 @@ export function useMultipleDownloads() {
   };
 
   const cancelDownload = async (jobId: string) => {
-    await fetch(`/v1/download/${jobId}`, { method: 'DELETE' });
+    await fetch(`/v1/download/${jobId}`, { method: "DELETE" });
     setDownloads((prev) => {
       const next = new Map(prev);
       next.delete(jobId);
@@ -1062,18 +1085,19 @@ export function useMultipleDownloads() {
 ```
 
 #### Retry with Exponential Backoff
+
 ```typescript
 async function retryWithBackoff(
   fn: () => Promise<any>,
   maxAttempts = 3,
-  baseDelay = 1000
+  baseDelay = 1000,
 ) {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       return await fn();
     } catch (error) {
       if (attempt === maxAttempts) throw error;
-      
+
       const delay = baseDelay * Math.pow(2, attempt - 1);
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
@@ -1082,20 +1106,21 @@ async function retryWithBackoff(
 ```
 
 #### Persist State (Local Storage)
+
 ```typescript
 // Persist download state across page refreshes
 useEffect(() => {
-  if (state.jobId && state.status !== 'idle') {
-    localStorage.setItem('activeDownload', JSON.stringify(state));
+  if (state.jobId && state.status !== "idle") {
+    localStorage.setItem("activeDownload", JSON.stringify(state));
   }
 }, [state]);
 
 // Restore on mount
 useEffect(() => {
-  const saved = localStorage.getItem('activeDownload');
+  const saved = localStorage.getItem("activeDownload");
   if (saved) {
     const state = JSON.parse(saved);
-    if (!['completed', 'failed'].includes(state.status)) {
+    if (!["completed", "failed"].includes(state.status)) {
       // Resume monitoring
       startPolling(state.jobId, 2000);
     }
@@ -1109,17 +1134,18 @@ useEffect(() => {
 
 ### 6.1 Scaling Strategy
 
-| Component | Scaling Strategy | Cost |
-|-----------|------------------|------|
-| **API Servers** | Horizontal auto-scaling (3-20 instances) | Medium |
-| **Workers** | Horizontal scaling (5-50 workers) | Medium |
-| **Redis** | Redis Cluster or AWS ElastiCache | Low-Medium |
-| **S3** | Auto-scales, lifecycle policies | Low |
-| **PostgreSQL** | Vertical scaling + read replicas | Medium |
+| Component       | Scaling Strategy                         | Cost       |
+| --------------- | ---------------------------------------- | ---------- |
+| **API Servers** | Horizontal auto-scaling (3-20 instances) | Medium     |
+| **Workers**     | Horizontal scaling (5-50 workers)        | Medium     |
+| **Redis**       | Redis Cluster or AWS ElastiCache         | Low-Medium |
+| **S3**          | Auto-scales, lifecycle policies          | Low        |
+| **PostgreSQL**  | Vertical scaling + read replicas         | Medium     |
 
 ### 6.2 Cost Optimization
 
 1. **S3 Lifecycle Policies**
+
 ```javascript
 // Auto-delete files after 24 hours
 {
@@ -1135,6 +1161,7 @@ useEffect(() => {
 ```
 
 2. **Redis Memory Optimization**
+
 ```
 # Eviction policy for cache
 maxmemory-policy allkeys-lru
@@ -1142,6 +1169,7 @@ maxmemory 2gb
 ```
 
 3. **Worker Concurrency**
+
 ```typescript
 // Optimize based on CPU cores
 const concurrency = Math.max(os.cpus().length - 1, 1);
@@ -1153,30 +1181,30 @@ const concurrency = Math.max(os.cpus().length - 1, 1);
 // Key metrics to track
 const metrics = {
   // Queue health
-  'queue.size': await downloadQueue.count(),
-  'queue.waiting': await downloadQueue.getWaitingCount(),
-  'queue.active': await downloadQueue.getActiveCount(),
-  'queue.failed': await downloadQueue.getFailedCount(),
-  
+  "queue.size": await downloadQueue.count(),
+  "queue.waiting": await downloadQueue.getWaitingCount(),
+  "queue.active": await downloadQueue.getActiveCount(),
+  "queue.failed": await downloadQueue.getFailedCount(),
+
   // Job performance
-  'job.duration.p50': await getP50Duration(),
-  'job.duration.p95': await getP95Duration(),
-  'job.duration.p99': await getP99Duration(),
-  'job.success_rate': await getSuccessRate(),
-  
+  "job.duration.p50": await getP50Duration(),
+  "job.duration.p95": await getP95Duration(),
+  "job.duration.p99": await getP99Duration(),
+  "job.success_rate": await getSuccessRate(),
+
   // System health
-  'redis.memory': await redis.info('memory'),
-  'workers.active': await getActiveWorkers(),
-  's3.storage': await getS3StorageSize(),
+  "redis.memory": await redis.info("memory"),
+  "workers.active": await getActiveWorkers(),
+  "s3.storage": await getS3StorageSize(),
 };
 
 // Alerts
-if (metrics['queue.waiting'] > 1000) {
-  alert('Queue backlog detected - scale workers');
+if (metrics["queue.waiting"] > 1000) {
+  alert("Queue backlog detected - scale workers");
 }
 
-if (metrics['job.success_rate'] < 0.95) {
-  alert('Job success rate below threshold');
+if (metrics["job.success_rate"] < 0.95) {
+  alert("Job success rate below threshold");
 }
 ```
 
@@ -1185,15 +1213,16 @@ if (metrics['job.success_rate'] < 0.95) {
 ## 7. Security Considerations
 
 ### 7.1 Authentication & Authorization
+
 ```typescript
 // Middleware for auth
 async function authenticateRequest(req, res, next) {
-  const token = req.headers.authorization?.split(' ')[1];
-  
+  const token = req.headers.authorization?.split(" ")[1];
+
   if (!token) {
-    return res.status(401).json({ error: 'Unauthorized' });
+    return res.status(401).json({ error: "Unauthorized" });
   }
-  
+
   const user = await verifyToken(token);
   req.user = user;
   next();
@@ -1203,55 +1232,58 @@ async function authenticateRequest(req, res, next) {
 async function authorizeJob(req, res, next) {
   const { jobId } = req.params;
   const job = await getJobMetadata(jobId);
-  
+
   if (job.userId !== req.user.id) {
-    return res.status(403).json({ error: 'Forbidden' });
+    return res.status(403).json({ error: "Forbidden" });
   }
-  
+
   next();
 }
 ```
 
 ### 7.2 Rate Limiting
+
 ```typescript
-import rateLimit from 'express-rate-limit';
+import rateLimit from "express-rate-limit";
 
 const downloadLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
   max: 10, // 10 requests per minute
-  message: 'Too many download requests',
+  message: "Too many download requests",
   standardHeaders: true,
   legacyHeaders: false,
 });
 
-app.post('/v1/download/initiate', downloadLimiter, initiateDownload);
+app.post("/v1/download/initiate", downloadLimiter, initiateDownload);
 ```
 
 ### 7.3 Input Validation
+
 ```typescript
-import Joi from 'joi';
+import Joi from "joi";
 
 const initiateSchema = Joi.object({
   file_id: Joi.number().integer().positive().required(),
-  priority: Joi.string().valid('low', 'normal', 'high').default('normal'),
+  priority: Joi.string().valid("low", "normal", "high").default("normal"),
   user_id: Joi.string().max(100).required(),
 });
 ```
 
 ### 7.4 Presigned URL Security
+
 ```typescript
 // Short expiry times
 const expirySeconds = 900; // 15 minutes
 
 // Restrict to specific IP (optional)
 const params = {
-  Bucket: 'downloads',
+  Bucket: "downloads",
   Key: s3Key,
   Expires: expirySeconds,
   ResponseContentDisposition: `attachment; filename="${fileName}"`,
 };
 
-const url = s3.getSignedUrl('getObject', params);
+const url = s3.getSignedUrl("getObject", params);
 ```
 
 ---
@@ -1259,41 +1291,42 @@ const url = s3.getSignedUrl('getObject', params);
 ## 8. Testing Strategy
 
 ### 8.1 Load Testing
+
 ```javascript
 // k6 load test script
-import http from 'k6/http';
-import { check, sleep } from 'k6';
+import http from "k6/http";
+import { check, sleep } from "k6";
 
 export let options = {
   stages: [
-    { duration: '2m', target: 100 },  // Ramp up to 100 users
-    { duration: '5m', target: 100 },  // Stay at 100 users
-    { duration: '2m', target: 0 },    // Ramp down
+    { duration: "2m", target: 100 }, // Ramp up to 100 users
+    { duration: "5m", target: 100 }, // Stay at 100 users
+    { duration: "2m", target: 0 }, // Ramp down
   ],
 };
 
 export default function () {
   // Initiate download
-  let res = http.post('http://api.example.com/v1/download/initiate', {
+  let res = http.post("http://api.example.com/v1/download/initiate", {
     file_id: 70000,
   });
-  
+
   check(res, {
-    'status is 200': (r) => r.status === 200,
-    'has job_id': (r) => r.json('data.job_id') !== null,
+    "status is 200": (r) => r.status === 200,
+    "has job_id": (r) => r.json("data.job_id") !== null,
   });
-  
-  const jobId = res.json('data.job_id');
-  
+
+  const jobId = res.json("data.job_id");
+
   // Poll until complete
   let completed = false;
   while (!completed) {
     sleep(2);
-    
+
     res = http.get(`http://api.example.com/v1/download/status/${jobId}`);
-    const status = res.json('data.status');
-    
-    if (status === 'completed' || status === 'failed') {
+    const status = res.json("data.status");
+
+    if (status === "completed" || status === "failed") {
       completed = true;
     }
   }
@@ -1305,8 +1338,9 @@ export default function () {
 ## 9. Deployment Architecture
 
 ### 9.1 Docker Compose (Development)
+
 ```yaml
-version: '3.8'
+version: "3.8"
 
 services:
   api:
@@ -1353,6 +1387,7 @@ volumes:
 ```
 
 ### 9.2 Kubernetes (Production)
+
 ```yaml
 # deployment.yaml
 apiVersion: apps/v1
@@ -1370,32 +1405,32 @@ spec:
         app: download-api
     spec:
       containers:
-      - name: api
-        image: download-api:latest
-        ports:
-        - containerPort: 3000
-        env:
-        - name: REDIS_HOST
-          value: redis-service
-        resources:
-          requests:
-            cpu: "500m"
-            memory: "512Mi"
-          limits:
-            cpu: "1000m"
-            memory: "1Gi"
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 3000
-          initialDelaySeconds: 30
-          periodSeconds: 10
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: 3000
-          initialDelaySeconds: 5
-          periodSeconds: 5
+        - name: api
+          image: download-api:latest
+          ports:
+            - containerPort: 3000
+          env:
+            - name: REDIS_HOST
+              value: redis-service
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 5
 
 ---
 apiVersion: apps/v1
@@ -1413,19 +1448,19 @@ spec:
         app: download-worker
     spec:
       containers:
-      - name: worker
-        image: download-api:latest
-        command: ["npm", "run", "worker"]
-        env:
-        - name: REDIS_HOST
-          value: redis-service
-        resources:
-          requests:
-            cpu: "1000m"
-            memory: "1Gi"
-          limits:
-            cpu: "2000m"
-            memory: "2Gi"
+        - name: worker
+          image: download-api:latest
+          command: ["npm", "run", "worker"]
+          env:
+            - name: REDIS_HOST
+              value: redis-service
+          resources:
+            requests:
+              cpu: "1000m"
+              memory: "1Gi"
+            limits:
+              cpu: "2000m"
+              memory: "2Gi"
 
 ---
 apiVersion: autoscaling/v2
@@ -1440,12 +1475,12 @@ spec:
   minReplicas: 5
   maxReplicas: 50
   metrics:
-  - type: Resource
-    resource:
-      name: cpu
-      target:
-        type: Utilization
-        averageUtilization: 70
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
 ```
 
 ---
@@ -1453,16 +1488,19 @@ spec:
 ## 10. Migration Path (Existing to New Architecture)
 
 ### Phase 1: Parallel Implementation (Week 1-2)
+
 1. Deploy new async endpoints alongside existing sync endpoints
 2. Keep existing `/download/start` working
 3. Add new `/download/initiate`, `/download/status/:jobId`
 
 ### Phase 2: Gradual Migration (Week 3-4)
+
 1. Update frontend to use new async API
 2. Monitor both systems in parallel
 3. Gradually route traffic to new system (10% → 50% → 100%)
 
 ### Phase 3: Deprecation (Week 5-6)
+
 1. Mark old endpoints as deprecated
 2. Send warnings to clients still using old API
 3. Complete migration and remove old code
@@ -1479,7 +1517,7 @@ This hybrid architecture provides:
 ✅ **User Experience**: Progress indicators and instant feedback  
 ✅ **Cost Efficiency**: Auto-cleanup, optimized storage, efficient queuing  
 ✅ **Security**: Rate limiting, auth, presigned URLs  
-✅ **Observability**: Comprehensive monitoring and alerting  
+✅ **Observability**: Comprehensive monitoring and alerting
 
 ### Key Takeaways
 
