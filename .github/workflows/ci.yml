@@ -122,6 +122,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Create .env files
+        run: |
+          echo "${{ secrets.ENV_FILE }}" > .env
+          echo "${{ secrets.ENV_STORAGE_FILE }}" > .env.storage
+          # Create empty files if secrets are missing to avoid docker compose errors
+          touch .env
+          touch .env.storage
+
       - name: Login to DockerHub
         uses: docker/login-action@v3
         with:
