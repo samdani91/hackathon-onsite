@@ -5,10 +5,77 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile.prod
+      # Enable BuildKit caching
+      args:
+        BUILDKIT_INLINE_CACHE: 1
     ports:
       - "3000:3000"
     env_file:
       - ../.env
+      - ../.env.storage
     environment:
       - NODE_ENV=production
+      # S3 configuration - endpoint override for container networking
+      - S3_ENDPOINT=http://delineate-storage:9000
+      - S3_BUCKET_NAME=downloads
+      - S3_FORCE_PATH_STYLE=true
+    depends_on:
+      delineate-storage-init:
+        condition: service_completed_successfully
     restart: unless-stopped
+    # Dockerfile already sets USER node, but explicit here for clarity
+    user: "1000:1000"
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=64m
+
+  delineate-storage:
+    image: rustfs/rustfs:latest
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    env_file:
+      - ../.env.storage
+    volumes:
+      # Persistent data volume
+      - rustfs-data:/data
+      # Logs volume  
+      - rustfs-logs:/logs
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "nc", "-z", "localhost", "9000" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+    # RustFS runs as UID 10001 by default
+
+  delineate-storage-init:
+    image: amazon/aws-cli:latest
+    depends_on:
+      delineate-storage:
+        condition: service_healthy
+    env_file:
+      - ../.env.storage
+    environment:
+      - AWS_DEFAULT_REGION=us-east-1
+    entrypoint: [ "/bin/sh", "-c" ]
+    command:
+      - |
+        aws --endpoint-url http://delineate-storage:9000 s3 mb s3://downloads --region us-east-1 || true
+        echo "Bucket 'downloads' is ready"
+    # Security
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  rustfs-data:
+    driver: local
+  rustfs-logs:
+    driver: local

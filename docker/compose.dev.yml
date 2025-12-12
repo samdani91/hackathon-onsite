@@ -5,17 +5,34 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile.dev
+      # Enable BuildKit caching
+      args:
+        BUILDKIT_INLINE_CACHE: 1
     ports:
       - "3000:3000"
     volumes:
-      - ../src:/app/src
+      # Mount source for hot reloading
+      - ../src:/app/src:ro
+      - ../.env:/app/.env:ro
     env_file:
       - ../.env
+      - ../.env.storage
     environment:
       - NODE_ENV=development
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://delineate-jaeger:4318
+      # S3 configuration - uses values from .env file via env_file
+      # Override endpoint for container networking
+      - S3_ENDPOINT=http://delineate-storage:9000
+      - S3_BUCKET_NAME=downloads
+      - S3_FORCE_PATH_STYLE=true
+    # Secrets loaded from environment, not hardcoded
     depends_on:
-      - delineate-jaeger
+      delineate-jaeger:
+        condition: service_started
+      delineate-storage-init:
+        condition: service_completed_successfully
+    # Run as non-root (UID 1000 = node user)
+    user: "1000:1000"
 
   delineate-jaeger:
     image: jaegertracing/all-in-one:latest
@@ -24,3 +41,46 @@ services:
       - "4318:4318"
     environment:
       - COLLECTOR_OTLP_ENABLED=true
+    # Run as non-root
+    user: "10001:10001"
+
+  delineate-storage:
+    image: rustfs/rustfs:latest
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    env_file:
+      - ../.env.storage
+    volumes:
+      # Persistent data volume
+      - rustfs-data:/data
+      # Logs volume
+      - rustfs-logs:/logs
+    healthcheck:
+      test: [ "CMD", "nc", "-z", "localhost", "9000" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    # RustFS runs as UID 10001 by default
+
+  delineate-storage-init:
+    image: amazon/aws-cli:latest
+    depends_on:
+      delineate-storage:
+        condition: service_healthy
+    env_file:
+      - ../.env.storage
+    environment:
+      - AWS_DEFAULT_REGION=us-east-1
+    entrypoint: [ "/bin/sh", "-c" ]
+    command:
+      - |
+        aws --endpoint-url http://delineate-storage:9000 s3 mb s3://downloads --region us-east-1 || true
+        echo "Bucket 'downloads' is ready"
+
+volumes:
+  rustfs-data:
+    driver: local
+  rustfs-logs:
+    driver: local
