@@ -13,6 +13,7 @@ import { cors } from "hono/cors";
 import { secureHeaders } from "hono/secure-headers";
 import { timeout } from "hono/timeout";
 import { rateLimiter } from "hono-rate-limiter";
+import client from "prom-client";
 
 // Helper for optional URL that treats empty string as undefined
 const optionalUrl = z
@@ -74,6 +75,93 @@ const otelSDK = new NodeSDK({
 });
 otelSDK.start();
 
+// ===== PROMETHEUS METRICS SETUP =====
+// Collect default Node.js metrics (memory, CPU, event loop)
+client.collectDefaultMetrics({
+  prefix: "nodejs_",
+});
+
+// HTTP Request Metrics
+const httpRequestsTotal = new client.Counter({
+  name: "http_requests_total",
+  help: "Total number of HTTP requests",
+  labelNames: ["method", "path", "status"],
+});
+
+const httpRequestDurationSeconds = new client.Histogram({
+  name: "http_request_duration_seconds",
+  help: "HTTP request duration in seconds",
+  labelNames: ["method", "path", "status"],
+  // Buckets from prometheus_guide.md - covers fast endpoints to long-running downloads
+  buckets: [0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 5, 10, 30, 60, 120, 180, 240, 300],
+});
+
+const httpRequestsInFlight = new client.Gauge({
+  name: "http_requests_in_flight",
+  help: "Number of HTTP requests currently being processed",
+  labelNames: ["method", "path"],
+});
+
+// Download-Specific Metrics
+const downloadRequestsTotal = new client.Counter({
+  name: "download_requests_total",
+  help: "Total number of download requests",
+  labelNames: ["endpoint", "status", "file_available"],
+});
+
+const downloadProcessingDurationSeconds = new client.Histogram({
+  name: "download_processing_duration_seconds",
+  help: "Download processing duration in seconds (includes simulated delay)",
+  labelNames: ["file_available"],
+  // Buckets from prometheus_guide.md - captures 10-200s delay range
+  buckets: [0.1, 0.5, 1, 2, 5, 10, 15, 30, 45, 60, 90, 120, 150, 180, 210, 240, 300],
+});
+
+const downloadActiveCount = new client.Gauge({
+  name: "download_active_count",
+  help: "Number of active download requests",
+});
+
+const downloadSimulatedDelaySeconds = new client.Histogram({
+  name: "download_simulated_delay_seconds",
+  help: "Simulated delay applied to downloads in seconds",
+  buckets: [10, 30, 60, 90, 120, 150, 180, 200],
+});
+
+const downloadFileSizeBytes = new client.Histogram({
+  name: "download_file_size_bytes",
+  help: "File size distribution in bytes",
+  labelNames: ["status"],
+  buckets: [1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000],
+});
+
+// S3 Operation Metrics
+const s3OperationsTotal = new client.Counter({
+  name: "s3_operations_total",
+  help: "Total number of S3 operations",
+  labelNames: ["operation", "result"],
+});
+
+const s3OperationDurationSeconds = new client.Histogram({
+  name: "s3_operation_duration_seconds",
+  help: "S3 operation duration in seconds",
+  labelNames: ["operation"],
+  buckets: [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
+});
+
+// Rate Limiting Metrics
+const rateLimitRejectionsTotal = new client.Counter({
+  name: "rate_limit_rejections_total",
+  help: "Total number of rate limit rejections",
+});
+
+// Timeout Metrics
+const timeoutErrorsTotal = new client.Counter({
+  name: "timeout_errors_total",
+  help: "Total number of timeout errors",
+  labelNames: ["endpoint"],
+});
+
 const app = new OpenAPIHono();
 
 // Request ID middleware - adds unique ID to each request
@@ -131,6 +219,36 @@ app.use(
     dsn: env.SENTRY_DSN,
   }),
 );
+
+// Prometheus HTTP metrics middleware
+app.use(async (c, next) => {
+  // Skip metrics endpoint to avoid recursion
+  if (c.req.path === "/metrics") {
+    await next();
+    return;
+  }
+
+  const method = c.req.method;
+  // Normalize path to prevent high cardinality
+  const path = c.req.path.startsWith("/v1/download/")
+    ? `/v1/download/${c.req.path.split("/")[3] ?? "unknown"}`
+    : c.req.path;
+
+  // Track in-flight requests
+  httpRequestsInFlight.labels(method, path).inc();
+  const startTime = Date.now();
+
+  try {
+    await next();
+  } finally {
+    const status = String(c.res.status);
+    const duration = (Date.now() - startTime) / 1000;
+
+    httpRequestsInFlight.labels(method, path).dec();
+    httpRequestsTotal.labels(method, path, status).inc();
+    httpRequestDurationSeconds.labels(method, path, status).observe(duration);
+  }
+});
 
 // Error response schema for OpenAPI
 const ErrorResponseSchema = z
@@ -263,6 +381,7 @@ const sanitizeS3Key = (fileId: number): string => {
 // S3 health check
 const checkS3Health = async (): Promise<boolean> => {
   if (!env.S3_BUCKET_NAME) return true; // Mock mode
+  const startTime = Date.now();
   try {
     // Use a lightweight HEAD request on a known path
     const command = new HeadObjectCommand({
@@ -270,11 +389,20 @@ const checkS3Health = async (): Promise<boolean> => {
       Key: "__health_check_marker__",
     });
     await s3Client.send(command);
+    const duration = (Date.now() - startTime) / 1000;
+    s3OperationDurationSeconds.labels("HeadObject").observe(duration);
+    s3OperationsTotal.labels("HeadObject", "success").inc();
     return true;
   } catch (err) {
+    const duration = (Date.now() - startTime) / 1000;
+    s3OperationDurationSeconds.labels("HeadObject").observe(duration);
     // NotFound is fine - bucket is accessible
-    if (err instanceof Error && err.name === "NotFound") return true;
+    if (err instanceof Error && err.name === "NotFound") {
+      s3OperationsTotal.labels("HeadObject", "not_found").inc();
+      return true;
+    }
     // AccessDenied or other errors indicate connection issues
+    s3OperationsTotal.labels("HeadObject", "error").inc();
     return false;
   }
 };
@@ -299,18 +427,25 @@ const checkS3Availability = async (
     };
   }
 
+  const startTime = Date.now();
   try {
     const command = new HeadObjectCommand({
       Bucket: env.S3_BUCKET_NAME,
       Key: s3Key,
     });
     const response = await s3Client.send(command);
+    const duration = (Date.now() - startTime) / 1000;
+    s3OperationDurationSeconds.labels("HeadObject").observe(duration);
+    s3OperationsTotal.labels("HeadObject", "success").inc();
     return {
       available: true,
       s3Key,
       size: response.ContentLength ?? null,
     };
   } catch {
+    const duration = (Date.now() - startTime) / 1000;
+    s3OperationDurationSeconds.labels("HeadObject").observe(duration);
+    s3OperationsTotal.labels("HeadObject", "not_found").inc();
     return {
       available: false,
       s3Key: null,
@@ -392,6 +527,13 @@ app.openapi(healthRoute, async (c) => {
     },
     httpStatus,
   );
+});
+
+// Prometheus metrics endpoint
+app.get("/metrics", async (c) => {
+  c.header("Content-Type", client.register.contentType);
+  const metrics = await client.register.metrics();
+  return c.text(metrics);
 });
 
 // Download API Routes
@@ -572,50 +714,71 @@ app.openapi(downloadStartRoute, async (c) => {
   const { file_id } = c.req.valid("json");
   const startTime = Date.now();
 
-  // Get random delay and log it
-  const delayMs = getRandomDelay();
-  const delaySec = (delayMs / 1000).toFixed(1);
-  const minDelaySec = (env.DOWNLOAD_DELAY_MIN_MS / 1000).toFixed(0);
-  const maxDelaySec = (env.DOWNLOAD_DELAY_MAX_MS / 1000).toFixed(0);
-  console.log(
-    `[Download] Starting file_id=${String(file_id)} | delay=${delaySec}s (range: ${minDelaySec}s-${maxDelaySec}s) | enabled=${String(env.DOWNLOAD_DELAY_ENABLED)}`,
-  );
+  // Track active downloads
+  downloadActiveCount.inc();
 
-  // Simulate long-running download process
-  await sleep(delayMs);
-
-  // Check if file is available in S3
-  const s3Result = await checkS3Availability(file_id);
-  const processingTimeMs = Date.now() - startTime;
-
-  console.log(
-    `[Download] Completed file_id=${String(file_id)}, actual_time=${String(processingTimeMs)}ms, available=${String(s3Result.available)}`,
-  );
-
-  if (s3Result.available) {
-    return c.json(
-      {
-        file_id,
-        status: "completed" as const,
-        downloadUrl: `https://storage.example.com/${s3Result.s3Key ?? ""}?token=${crypto.randomUUID()}`,
-        size: s3Result.size,
-        processingTimeMs,
-        message: `Download ready after ${(processingTimeMs / 1000).toFixed(1)} seconds`,
-      },
-      200,
+  try {
+    // Get random delay and log it
+    const delayMs = getRandomDelay();
+    const delaySec = (delayMs / 1000).toFixed(1);
+    const minDelaySec = (env.DOWNLOAD_DELAY_MIN_MS / 1000).toFixed(0);
+    const maxDelaySec = (env.DOWNLOAD_DELAY_MAX_MS / 1000).toFixed(0);
+    console.log(
+      `[Download] Starting file_id=${String(file_id)} | delay=${delaySec}s (range: ${minDelaySec}s-${maxDelaySec}s) | enabled=${String(env.DOWNLOAD_DELAY_ENABLED)}`,
     );
-  } else {
-    return c.json(
-      {
-        file_id,
-        status: "failed" as const,
-        downloadUrl: null,
-        size: null,
-        processingTimeMs,
-        message: `File not found after ${(processingTimeMs / 1000).toFixed(1)} seconds of processing`,
-      },
-      200,
+
+    // Record simulated delay metric
+    downloadSimulatedDelaySeconds.observe(delayMs / 1000);
+
+    // Simulate long-running download process
+    await sleep(delayMs);
+
+    // Check if file is available in S3
+    const s3Result = await checkS3Availability(file_id);
+    const processingTimeMs = Date.now() - startTime;
+    const processingTimeSec = processingTimeMs / 1000;
+
+    console.log(
+      `[Download] Completed file_id=${String(file_id)}, actual_time=${String(processingTimeMs)}ms, available=${String(s3Result.available)}`,
     );
+
+    // Record download metrics
+    downloadProcessingDurationSeconds
+      .labels(String(s3Result.available))
+      .observe(processingTimeSec);
+
+    if (s3Result.available) {
+      downloadRequestsTotal.labels("start", "completed", "true").inc();
+      if (s3Result.size) {
+        downloadFileSizeBytes.labels("completed").observe(s3Result.size);
+      }
+      return c.json(
+        {
+          file_id,
+          status: "completed" as const,
+          downloadUrl: `https://storage.example.com/${s3Result.s3Key ?? ""}?token=${crypto.randomUUID()}`,
+          size: s3Result.size,
+          processingTimeMs,
+          message: `Download ready after ${(processingTimeMs / 1000).toFixed(1)} seconds`,
+        },
+        200,
+      );
+    } else {
+      downloadRequestsTotal.labels("start", "failed", "false").inc();
+      return c.json(
+        {
+          file_id,
+          status: "failed" as const,
+          downloadUrl: null,
+          size: null,
+          processingTimeMs,
+          message: `File not found after ${(processingTimeMs / 1000).toFixed(1)} seconds of processing`,
+        },
+        200,
+      );
+    }
+  } finally {
+    downloadActiveCount.dec();
   }
 });
 
