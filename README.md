@@ -5,6 +5,7 @@
 **Frontend Application**: http://36.255.70.156
 
 The complete solution is deployed with:
+
 - **Frontend**: React application with real-time download tracking
 - **Backend**: Node.js API with S3 storage integration
 - **Infrastructure**: nginx reverse proxy, Prometheus monitoring, Docker containerization
@@ -421,6 +422,7 @@ Errors in Sentry tagged with: trace_id=abc123
 ## Tech Stack
 
 ### Backend
+
 - **Runtime**: Node.js 24 with native TypeScript support
 - **Framework**: [Hono](https://hono.dev) - Ultra-fast web framework
 - **Validation**: [Zod](https://zod.dev) with OpenAPI integration
@@ -430,12 +432,14 @@ Errors in Sentry tagged with: trace_id=abc123
 - **Documentation**: Scalar OpenAPI UI
 
 ### Frontend
+
 - **Framework**: React with Vite
 - **UI Components**: Modern responsive design
 - **Real-time Updates**: WebSocket/polling for download progress
 - **Error Handling**: Integrated Sentry error tracking
 
 ### Infrastructure & DevOps
+
 - **Reverse Proxy**: nginx with load balancing
 - **Monitoring**: Prometheus metrics collection
 - **Containerization**: Docker & Docker Compose
@@ -614,24 +618,28 @@ npm run docker:prod  # Start with Docker (production)
 ## 🔧 Infrastructure Components
 
 ### nginx Configuration
+
 - Reverse proxy for frontend and API
 - Load balancing across multiple backend instances
 - Static file serving with caching
 - SSL termination and security headers
 
 ### Prometheus Monitoring
+
 - API response time metrics
 - Download job success/failure rates
 - System resource utilization
 - Custom business metrics
 
 ### Docker Containerization
+
 - Multi-stage builds for optimized images
 - Health checks for all services
 - Volume persistence for data
 - Network isolation and security
 
 ### GitHub Actions CI/CD
+
 - Automated testing on every push
 - Docker image building and pushing
 - Zero-downtime production deployments
@@ -649,12 +657,12 @@ Visit the live application at **http://36.255.70.156** to see:
 
 ### Metrics Available
 
-| Metric Type | Description | Endpoint |
-|-------------|-------------|----------|
-| Health Check | Service availability | `/health` |
-| API Metrics | Response times, error rates | `/metrics` |
-| Download Stats | Job completion rates | Frontend dashboard |
-| System Metrics | CPU, memory, disk usage | Prometheus |
+| Metric Type    | Description                 | Endpoint           |
+| -------------- | --------------------------- | ------------------ |
+| Health Check   | Service availability        | `/health`          |
+| API Metrics    | Response times, error rates | `/metrics`         |
+| Download Stats | Job completion rates        | Frontend dashboard |
+| System Metrics | CPU, memory, disk usage     | Prometheus         |
 
 ## Security Features
 
