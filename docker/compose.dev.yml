@@ -96,6 +96,22 @@ services:
     # Run as non-root
     user: "65534:65534"
 
+  delineate-frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+    ports:
+      - "5173:80"
+    env_file:
+      - ../.env
+      - ../frontend/.env
+    depends_on:
+      delineate-app:
+        condition: service_started
+    restart: unless-stopped
+
 volumes:
   rustfs-data:
     driver: local
