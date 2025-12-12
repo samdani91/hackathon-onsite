@@ -28,7 +28,12 @@ setupMiddleware(app);
 
 // Setup routes
 healthRequestHandler(app);
+healthRequestHandler(app);
 downloadRequestHandler(app);
+
+// Legacy health check for e2e runner compatibility
+app.get("/health", (c) => c.redirect("/v1/health"));
+app.get("/", (c) => c.redirect("/v1/"));
 
 // OpenAPI spec endpoint (disabled in production)
 if (env.NODE_ENV !== "production") {
