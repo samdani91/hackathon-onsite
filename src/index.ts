@@ -93,7 +93,9 @@ const httpRequestDurationSeconds = new client.Histogram({
   help: "HTTP request duration in seconds",
   labelNames: ["method", "path", "status"],
   // Buckets from prometheus_guide.md - covers fast endpoints to long-running downloads
-  buckets: [0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 5, 10, 30, 60, 120, 180, 240, 300],
+  buckets: [
+    0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 5, 10, 30, 60, 120, 180, 240, 300,
+  ],
 });
 
 const httpRequestsInFlight = new client.Gauge({
@@ -114,7 +116,9 @@ const downloadProcessingDurationSeconds = new client.Histogram({
   help: "Download processing duration in seconds (includes simulated delay)",
   labelNames: ["file_available"],
   // Buckets from prometheus_guide.md - captures 10-200s delay range
-  buckets: [0.1, 0.5, 1, 2, 5, 10, 15, 30, 45, 60, 90, 120, 150, 180, 210, 240, 300],
+  buckets: [
+    0.1, 0.5, 1, 2, 5, 10, 15, 30, 45, 60, 90, 120, 150, 180, 210, 240, 300,
+  ],
 });
 
 const downloadActiveCount = new client.Gauge({
