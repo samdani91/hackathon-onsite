@@ -2,12 +2,13 @@ name: delineate
 
 services:
   delineate-app:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.prod
-      # Enable BuildKit caching
-      args:
-        BUILDKIT_INLINE_CACHE: 1
+    image: hasinloosingcontrol/delineate-hackathon-challenge:latest
+    # build:
+    #   context: ..
+    #   dockerfile: docker/Dockerfile.prod
+    #   # Enable BuildKit caching
+    #   args:
+    #     BUILDKIT_INLINE_CACHE: 1
     ports:
       - "3000:3000"
     env_file:
