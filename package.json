@@ -34,6 +34,7 @@
   "devDependencies": {
     "@hono/eslint-config": "^2.0.3",
     "@types/node": "^24.10.2",
+    "eslint": "^9.39.1",
     "prettier": "^3.7.4",
     "typescript": "^5.8.3"
   }
